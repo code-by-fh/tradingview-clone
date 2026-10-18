@@ -1,0 +1,88 @@
+name: tradingview-local
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Missing POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: platform
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U platform -d platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      context: ./platform/backend
+      target: runtime
+    restart: unless-stopped
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "4000"
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://platform:${POSTGRES_PASSWORD}@db:5432/platform
+      AUTH_ENABLED: "false"
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "false"
+      SESSION_SECRET: ${SESSION_SECRET:?Missing SESSION_SECRET in .env}
+      ALERT_ENCRYPTION_KEY: ${ALERT_ENCRYPTION_KEY:?Missing ALERT_ENCRYPTION_KEY in .env}
+      ALLOWED_WEBHOOK_HOSTS: disabled.invalid
+      LIVE_TEST_ENABLED: "false"
+      LIVE_RUNNER_ENABLED: "false"
+      MANUAL_TRADING_ENABLED: "false"
+      SPOT_EXECUTION_ENABLED: "false"
+      DERIVATIVE_EXECUTION_ENABLED: "false"
+      EQUITY_PAPER_EXECUTION_ENABLED: "false"
+      TRADITIONAL_PAPER_EXECUTION_ENABLED: "false"
+      REALIZATION_INGESTION_ENABLED: "false"
+      SCANNER_SERVICE_URL: ""
+      BINANCE_MARKET_DATA_BASE_URL: https://data-api.binance.vision
+      PUBLIC_BASE_URL: http://localhost:3000
+      ALLOW_SIGNUPS: "false"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 30
+
+  frontend:
+    build:
+      context: ./platform/frontend
+      target: runtime
+      args:
+        BACKEND_URL: http://backend:4000
+        AUTH_ENABLED: "false"
+    restart: unless-stopped
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      NEXT_TELEMETRY_DISABLED: "1"
+      BACKEND_URL: http://backend:4000
+      AUTH_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+volumes:
+  database:

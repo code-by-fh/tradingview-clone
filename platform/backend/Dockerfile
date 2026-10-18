@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -6,7 +6,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -19,7 +19,7 @@ USER node
 EXPOSE 4000
 CMD ["node", "dist/index.js"]
 
-FROM node:20-bookworm-slim AS optimizer
+FROM node:22-bookworm-slim AS optimizer
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
